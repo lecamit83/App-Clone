@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const validator = require('validator');
+const jwt = require('jsonwebtoken');
 const Schema = mongoose.Schema;
 
 
@@ -15,31 +16,17 @@ const userSchema = new Schema({
         required: true,
         trim : true,
         lowercase: true,
-        validate(value) {
-            if(!validator.isEmail(value)){
-                throw new Error("Email is invalid!");
-            }
-            if(User.find({email : value})){
-                throw new Error("Email is duplicated!");
-            }
-            
-        }
     }, 
     password : {
         type : String,
         required : true,
-        validate(value) {
-            if(value.toLowerCase().includes('password')) {
-                throw new Error("Password cannot contain 'password'")
-            }
-            if(value.toLowerCase().includes(' ')) {
-                throw new Error("Password cannot contain 'space'")
-            }
-            if(!validator.isLength(value, {min : 6 , max : 30})) {
-                throw new Error("Password length must between 6 to 30")
-            }
+    },
+    tokens : [{
+        token : {
+            type : String,
+            require : true
         }
-    }
+    }]
 }, {
     timestamps: true
 });
@@ -52,8 +39,21 @@ userSchema.methods.toJSON = function () {
 
     delete objectUser.password;
     delete objectUser.tokens;
-
+    
     return objectUser;
+}
+
+userSchema.methods.generateAuthenticationToken = async function () {
+    const user = this;
+   
+    const token = await jwt.sign({_id : user._id.toString()} , process.env.SECRET, {expiresIn : '7 days'});
+
+    
+    user.tokens = user.tokens.concat({ token });
+
+    await user.save();
+
+    return token;
 }
 
 userSchema.pre('save', async function(next){
